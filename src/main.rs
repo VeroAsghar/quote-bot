@@ -1,4 +1,4 @@
-use quotes_bot::Author;
+use chrono::prelude::*;
 use serenity::{async_trait, model::prelude::*, prelude::*};
 use std::time::SystemTime;
 
@@ -13,19 +13,22 @@ impl EventHandler for Bot {
     async fn message(&self, ctx: Context, msg: Message) {
         let author = msg.author;
         let guild_id = msg.guild_id.unwrap();
-        if author
-            .has_role(&ctx, guild_id, STATIC_ID)
-            .await
-            .unwrap()
-        {
+        if author.has_role(&ctx, guild_id, STATIC_ID).await.unwrap() {
             {
                 if let Some(quote) = msg.content.strip_prefix("!manaquotes add") {
                     let quote = quote.trim();
-                    let id = sqlx::query!(r#"INSERT INTO quotes ( quote ) VALUES ( ?1 )"#, quote)
-                        .execute(&self.database)
-                        .await
-                        .unwrap()
-                        .last_insert_rowid();
+                    let author = "Mana";
+                    let date = Utc::now().date().to_string();
+                    let id = sqlx::query!(
+                        r#"INSERT INTO quotes ( quote, author, date ) VALUES ( ?, ?, ? )"#,
+                        quote,
+                        author,
+                        date
+                    )
+                    .execute(&self.database)
+                    .await
+                    .unwrap()
+                    .last_insert_rowid();
                     let response = format!("Added quote #{} to the list", id);
                     msg.channel_id.say(&ctx, response).await.unwrap();
                 } else if let Some(id) = msg.content.strip_prefix("!manaquotes remove") {
@@ -37,12 +40,12 @@ impl EventHandler for Bot {
                     let response = format!("Removed quote from the list");
                     msg.channel_id.say(&ctx, response).await.unwrap();
                 } else if let Some(_) = msg.content.strip_prefix("!manaquotes length") {
-                    let (column_length,): (i64,) =
-                        sqlx::query_as("SELECT COUNT(quote) FROM quotes")
+                    let (author, num_of_quotes,): (String, i64,) =
+                        sqlx::query_as("SELECT author, COUNT(quote) FROM quotes GROUP BY author")
                             .fetch_one(&self.database)
                             .await
                             .unwrap();
-                    let response = format!(r#"Mana has {} quotes saved."#, column_length);
+                    let response = format!(r#"{} has {} quotes saved."#, author, num_of_quotes);
                     msg.channel_id.say(&ctx, response).await.unwrap();
                 }
             }
