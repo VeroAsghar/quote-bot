@@ -11,9 +11,9 @@ const STATIC_ID: RoleId = RoleId(801823428457267240);
 #[async_trait]
 impl EventHandler for Bot {
     async fn message(&self, ctx: Context, msg: Message) {
-        let author = msg.author;
+        let sender = msg.author;
         let guild_id = msg.guild_id.unwrap();
-        if author.has_role(&ctx, guild_id, STATIC_ID).await.unwrap() {
+        if sender.has_role(&ctx, guild_id, STATIC_ID).await.unwrap() {
             {
                 if let Some(quote) = msg.content.strip_prefix("!manaquotes add") {
                     let quote = quote.trim();
