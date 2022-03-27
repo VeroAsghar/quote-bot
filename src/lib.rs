@@ -1,45 +1,91 @@
+use chrono::Utc;
 use std::collections::HashMap;
 
-type Command = fn(String) -> String;
-struct Bot {
+type Author = String;
+type Args = String;
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum Command {
+    Add,
+    Remove,
+    List,
+    Random,
+}
+
+pub struct Bot {
     members: HashMap<String, String>,
     commands: HashMap<String, Command>,
 }
 
 impl Bot {
-    fn parse_message(&self, message: String) -> String {
-        let mut response = "".to_string();
+    pub fn new() -> Self {
+        Bot {
+            members: HashMap::new(),
+            commands: HashMap::new(),
+        }
+    }
+    pub async fn insert_member(&mut self, key: String, value: String) {
+        self.members.insert(key, value);
+    }
+    pub async fn insert_command(&mut self, key: String, value: Command) {
+        self.commands.insert(key, value);
+    }
+    pub async fn parse_message(&self, message: String) -> (Author, Command, Option<Args>) {
+        let mut author = String::new();
+        let mut args: Option<String> = None;
+        let mut command: Option<Command> = None;
         if let Some(message) = message.strip_prefix("!quotes") {
             let message = message.trim();
             let mut message: Vec<&str> = message.split(' ').collect();
             if let Some(value) = self.members.get(&message[0].to_ascii_lowercase()) {
-                let _author = value.to_string().clone();
+                author = value.to_string();
                 message.remove(0);
             }
-            if let Some(command_func) = self.commands.get(message[0].to_ascii_lowercase().as_str())
-            {
+            if let Some(value) = self.commands.get(&message[0].to_ascii_lowercase()) {
                 message.remove(0);
-                let args = message.join(" ").to_string();
-                response = command_func(args);
+                args = Some(message.join(" ").to_string());
+                command = Some(*value);
             }
         }
-        response
+        (author, command.unwrap(), args)
+    }
+    pub async fn add_quote(
+        author: String,
+        quote: String,
+        database: Option<&sqlx::SqlitePool>,
+    ) -> String {
+        let quote = quote.trim();
+        let date = Utc::now().date().to_string();
+        let id = sqlx::query!(
+            r#"INSERT INTO quotes ( quote, author, date ) VALUES ( ?, ?, ? )"#,
+            quote,
+            author,
+            date
+        )
+        .execute(database.unwrap())
+        .await
+        .unwrap()
+        .last_insert_rowid();
+        format!("Added quote #{}.", id)
     }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn strip_prefix_author_and_command_from_message() {
-        let mut members = HashMap::new();
-        let mut commands = HashMap::new();
-        let command_dummy: Command = |s| { s };
-        members.insert("fran".to_string(), "Fran".to_string());
-        commands.insert("add".to_string(), command_dummy as Command);
-        let bot = Bot { members, commands };
+
+    #[tokio::test]
+    async fn strip_prefix_author_and_command_from_message() {
+        let mut bot = Bot::new();
+        bot.insert_member("fran".to_string(), "Fran".to_string())
+            .await;
+        bot.insert_command("add".to_string(), Command::Add)
+            .await;
+
         let message = "!quotes fran add blah".to_string();
-        let response = bot.parse_message(message);
-        assert_eq!("blah", response);
+        let (author, command, args) = bot.parse_message(message).await;
+        assert_eq!("Fran", author);
+        assert_eq!(Command::Add, command);
+        assert_eq!("blah", args.unwrap());
     }
 }

@@ -876,7 +876,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "quotes-bot"
+name = "quote-bot"
 version = "0.1.0"
 dependencies = [
  "chrono",
