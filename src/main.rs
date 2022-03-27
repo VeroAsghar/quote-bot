@@ -17,10 +17,11 @@ impl EventHandler for Robot {
         let guild_id = msg.guild_id.unwrap();
 
         if sender.has_role(&ctx, guild_id, STATIC_ID).await.unwrap() {
-            let (author, command, args) = self.bot.parse_message(msg.content).await;
+            let (author, command, args) = self.bot.parse_message(msg.content.clone()).await;
             match command {
                 Command::Add => {
-                    let response = Bot::add_quote(author, args.unwrap(), Some(&self.database)).await;
+                    let response =
+                        Bot::add_quote(author, args.unwrap(), Some(&self.database)).await;
                     msg.channel_id.say(&ctx, response).await.unwrap();
                 }
                 _ => unimplemented!(),
@@ -60,28 +61,29 @@ impl EventHandler for Robot {
             //                    msg.channel_id.say(&ctx, response).await.unwrap();
             //                }
             //            }
-        } else if let Some(_) = msg.content.strip_prefix("!manaquotes random") {
-            let (column_length,): (i64,) = sqlx::query_as("SELECT COUNT(quote) FROM quotes")
-                .fetch_one(&self.database)
-                .await
-                .unwrap();
-            let rand_rowid: i64 = (SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-                % column_length as u64)
-                .try_into()
-                .unwrap();
-            let quotes = sqlx::query!(r#"SELECT quote FROM quotes"#)
-                .fetch_all(&self.database)
-                .await
-                .unwrap();
-            let mut actual_quotes = Vec::new();
-            for quote in quotes.iter() {
-                actual_quotes.push(quote.quote.clone());
+            if let Some(_) = msg.content.strip_prefix("!manaquotes random") {
+                let (column_length,): (i64,) = sqlx::query_as("SELECT COUNT(quote) FROM quotes")
+                    .fetch_one(&self.database)
+                    .await
+                    .unwrap();
+                let rand_rowid: i64 = (SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs()
+                    % column_length as u64)
+                    .try_into()
+                    .unwrap();
+                let quotes = sqlx::query!(r#"SELECT quote FROM quotes"#)
+                    .fetch_all(&self.database)
+                    .await
+                    .unwrap();
+                let mut actual_quotes = Vec::new();
+                for quote in quotes.iter() {
+                    actual_quotes.push(quote.quote.clone());
+                }
+                let response = format!(r#""{}""#, actual_quotes.get(rand_rowid as usize).unwrap());
+                msg.channel_id.say(&ctx, response).await.unwrap();
             }
-            let response = format!(r#""{}""#, actual_quotes.get(rand_rowid as usize).unwrap());
-            msg.channel_id.say(&ctx, response).await.unwrap();
         }
     }
 }

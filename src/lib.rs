@@ -10,6 +10,7 @@ pub enum Command {
     Remove,
     List,
     Random,
+    DNE,
 }
 
 pub struct Bot {
@@ -47,11 +48,12 @@ impl Bot {
                 command = Some(*value);
             }
         }
+        println!("{:?}", command.unwrap());
         (author, command.unwrap(), args)
     }
     pub async fn add_quote(
         author: String,
-        quote: String,
+            quote: String,
         database: Option<&sqlx::SqlitePool>,
     ) -> String {
         let quote = quote.trim();
@@ -73,14 +75,12 @@ impl Bot {
 mod tests {
     use super::*;
 
-
     #[tokio::test]
     async fn strip_prefix_author_and_command_from_message() {
         let mut bot = Bot::new();
         bot.insert_member("fran".to_string(), "Fran".to_string())
             .await;
-        bot.insert_command("add".to_string(), Command::Add)
-            .await;
+        bot.insert_command("add".to_string(), Command::Add).await;
 
         let message = "!quotes fran add blah".to_string();
         let (author, command, args) = bot.parse_message(message).await;
