@@ -4,3 +4,4 @@
 *.sqlite-shm
 
 Cargo.lock
+members.json

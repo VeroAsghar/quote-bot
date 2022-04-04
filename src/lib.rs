@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Result;
 use std::collections::HashMap;
@@ -127,28 +127,34 @@ impl Bot {
             .unwrap();
 
         if let Some(author) = author {
-            let quotes = sqlx::query!(r#"SELECT quote FROM quotes WHERE author = ?"#, author)
+            let quotes = sqlx::query!(r#"SELECT quote, date FROM quotes WHERE author = ?"#, author)
                 .fetch_all(database)
                 .await
                 .unwrap();
-            let mut actual_quotes = Vec::new();
-            for quote in quotes.iter() {
-                actual_quotes.push(quote.quote.clone());
-            }
+            let date = quotes.get(rand_rowid as usize).unwrap().date.clone();
+            let date = NaiveDate::parse_from_str(&date, "%Y-%m-%dUTC")
+                .unwrap()
+                .format("%b %d, %Y").to_string();
             format!(
-                r#""{}" - {}"#,
-                actual_quotes.get(rand_rowid as usize).unwrap(),
-                author
+                r#""{}" - {} ({})"#,
+                quotes.get(rand_rowid as usize).unwrap().quote,
+                author,
+                date,
             )
         } else {
-            let quotes = sqlx::query!(r#"SELECT quote, author FROM quotes"#)
+            let quotes = sqlx::query!(r#"SELECT quote, author, date FROM quotes"#)
                 .fetch_all(database)
                 .await
                 .unwrap();
+            let date = quotes.get(rand_rowid as usize).unwrap().date.clone();
+            let date = NaiveDate::parse_from_str(&date, "%Y-%m-%dUTC")
+                .unwrap()
+                .format("%b %d, %Y").to_string();
             format!(
-                r#""{}" - {}"#,
+                r#""{}" - {} ({})"#,
                 quotes.get(rand_rowid as usize).unwrap().quote,
                 quotes.get(rand_rowid as usize).unwrap().author,
+                date,
             )
         }
     }
@@ -238,5 +244,22 @@ mod tests {
         }
         assert_eq!(*bot.members.get("fran").unwrap(), "Fran".to_string());
         assert_eq!(*bot.members.get("varek").unwrap(), "Varek".to_string());
+    }
+
+    #[test]
+    fn string_date_can_be_parsed() {
+        let string_date = Utc::now().date().to_string();
+        let date = NaiveDate::parse_from_str(&string_date, "%Y-%m-%dUTC")
+            .unwrap()
+            .to_string();
+        assert_eq!(string_date, format!("{}UTC", date));
+    }
+    #[test]
+    fn string_date_can_be_parsed_into_correct_format() {
+        let string_date = NaiveDate::from_ymd(2015, 9, 5).to_string();
+        let date = NaiveDate::parse_from_str(&string_date, "%Y-%m-%d")
+            .unwrap()
+            .format("%b %d, %Y");
+        assert_eq!("Sep 05, 2015", format!("{}", date));
     }
 }
