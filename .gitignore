@@ -2,3 +2,5 @@
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+
+Cargo.lock

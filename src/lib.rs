@@ -1,14 +1,24 @@
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
+use serde_json::Result;
 use std::collections::HashMap;
 use std::time::SystemTime;
 
-type Author = String;
-type Args = String;
-
 pub struct ParsedMessage {
     pub command: Command,
-    pub author: Option<Author>,
-    pub args: Option<Args>,
+    pub author: Option<String>,
+    pub args: Option<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct Config {
+    members: Vec<Member>,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct Member {
+    name: String,
+    display_name: String,
 }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -24,7 +34,6 @@ pub struct Bot {
     members: HashMap<String, String>,
     commands: HashMap<String, Command>,
 }
-
 impl Bot {
     pub fn new() -> Self {
         Bot {
@@ -32,11 +41,11 @@ impl Bot {
             commands: HashMap::new(),
         }
     }
-    pub async fn insert_member(&mut self, key: String, value: String) {
-        self.members.insert(key, value);
+    pub async fn insert_member(&mut self, name: String, display_name: String) {
+        self.members.insert(name, display_name);
     }
-    pub async fn insert_command(&mut self, key: String, value: Command) {
-        self.commands.insert(key, value);
+    pub async fn insert_command(&mut self, name: String, value: Command) {
+        self.commands.insert(name, value);
     }
     pub async fn parse_message(&self, message: String) -> Option<ParsedMessage> {
         let mut author = None;
@@ -65,7 +74,7 @@ impl Bot {
             })
         }
     }
-    pub async fn add_quote(author: Author, quote: String, database: &sqlx::SqlitePool) -> String {
+    pub async fn add_quote(author: String, quote: String, database: &sqlx::SqlitePool) -> String {
         let quote = quote.trim();
         let date = Utc::now().date().to_string();
         let id = sqlx::query!(
@@ -80,7 +89,7 @@ impl Bot {
         .last_insert_rowid();
         format!("Added quote #{}.", id)
     }
-    pub async fn num_of_quotes(author: &Option<Author>, database: &sqlx::SqlitePool) -> i32 {
+    pub async fn num_of_quotes(author: &Option<String>, database: &sqlx::SqlitePool) -> i32 {
         if let Some(author) = author.as_deref() {
             let quotes = sqlx::query!(
                 r"SELECT COUNT(*) as count FROM quotes WHERE author = ?",
@@ -98,7 +107,7 @@ impl Bot {
             quotes.count
         }
     }
-    pub async fn length(author: Option<Author>, database: &sqlx::SqlitePool) -> String {
+    pub async fn length(author: Option<String>, database: &sqlx::SqlitePool) -> String {
         if author.is_some() {
             let quotes_count = Bot::num_of_quotes(&author, database).await;
             format!(r#"{} has {} quotes saved."#, author.unwrap(), quotes_count)
@@ -107,7 +116,7 @@ impl Bot {
             format!("Bot has {} quotes saved.", quotes_count)
         }
     }
-    pub async fn random(author: Option<Author>, database: &sqlx::SqlitePool) -> String {
+    pub async fn random(author: Option<String>, database: &sqlx::SqlitePool) -> String {
         let column_length = Bot::num_of_quotes(&author, database).await;
         let rand_rowid: i64 = (SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -176,5 +185,58 @@ mod tests {
         if let Some(_parsed_msg) = bot.parse_message(message).await {
             panic!();
         }
+    }
+    #[test]
+    fn parse_member_from_json() {
+        let json_data = r#"
+            {
+                "name": "fran",
+                "display_name": "Fran"
+            }"#;
+        let member: Member = serde_json::from_str(json_data).unwrap();
+        assert_eq!(member.name, "fran".to_string());
+        assert_eq!(member.display_name, "Fran".to_string());
+    }
+    #[test]
+    fn parse_member_list_from_json() {
+        let json_data = r#"
+            {
+                "members": [
+                    {
+                        "name": "fran",
+                        "display_name": "Fran"
+                    },
+                    {
+                        "name": "varek",
+                        "display_name": "Varek"
+                    }
+                ]
+            }"#;
+        let config: Config = serde_json::from_str(json_data).unwrap();
+        assert_eq!(config.members[0].name, "fran".to_string());
+        assert_eq!(config.members[1].display_name, "Varek".to_string());
+    }
+    #[tokio::test]
+    async fn parse_member_list_from_json_into_bot() {
+        let json_data = r#"
+            {
+                "members": [
+                    {
+                        "name": "fran",
+                        "display_name": "Fran"
+                    },
+                    {
+                        "name": "varek",
+                        "display_name": "Varek"
+                    }
+                ]
+            }"#;
+        let config: Config = serde_json::from_str(json_data).unwrap();
+        let mut bot = Bot::new();
+        for Member { name, display_name } in config.members {
+            bot.insert_member(name, display_name).await;
+        }
+        assert_eq!(*bot.members.get("fran").unwrap(), "Fran".to_string());
+        assert_eq!(*bot.members.get("varek").unwrap(), "Varek".to_string());
     }
 }
