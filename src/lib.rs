@@ -12,13 +12,13 @@ pub struct ParsedMessage {
 
 #[derive(Deserialize, Serialize)]
 pub struct Config {
-    members: Vec<Member>,
+    pub members: Vec<Member>,
 }
 
 #[derive(Deserialize, Serialize)]
 pub struct Member {
-    name: String,
-    display_name: String,
+    pub name: String,
+    pub display_name: String,
 }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
