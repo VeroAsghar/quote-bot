@@ -148,11 +148,11 @@ impl Bot {
 }
 
 #[cfg(test)]
-mod bot_tests {
+mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn strip_prefix_author_and_command_from_message() {
+    async fn parse_author_command_and_quote_from_message() {
         let mut bot = Bot::new();
         bot.insert_member("fran".to_string(), "Fran".to_string())
             .await;
