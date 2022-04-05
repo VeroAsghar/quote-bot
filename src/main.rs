@@ -1,4 +1,4 @@
-use quote_bot::*;
+use quote_bot::prelude::*;
 use serenity::{async_trait, model::prelude::*, prelude::*};
 use std::fs::File;
 use std::io::BufReader;
@@ -85,7 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reader = BufReader::new(config_file);
     let config: Config = serde_json::from_reader(reader)?;
     let mut bot = Bot::new();
-    for quote_bot::Member { name, display_name } in config.members {
+    for quote_bot::config::Member { name, display_name } in config.members {
         bot.insert_member(name, display_name).await;
     }
     setup_bot(&mut bot).await;

@@ -3,5 +3,4 @@
 *.sqlite-wal
 *.sqlite-shm
 
-Cargo.lock
 members.json
