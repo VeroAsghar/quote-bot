@@ -43,10 +43,14 @@ impl Bot {
                 author = Some(value.to_string());
                 message.remove(0);
             }
-            if let Some(value) = self.commands.get(&message[0].to_ascii_lowercase()) {
-                message.remove(0);
-                args = Some(message.join(" ").to_string());
-                command = *value;
+            if !message.is_empty() && message[0] != "" {
+                if let Some(value) = self.commands.get(&message[0].to_ascii_lowercase()) {
+                    message.remove(0);
+                    args = Some(message.join(" ").to_string());
+                    command = *value;
+                }
+            } else {
+                command = Command::Random;
             }
         }
         if command == Command::IgnoreMsg {
@@ -150,6 +154,41 @@ impl Bot {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn parse_random_command_from_empty_tail() {
+        let mut bot = Bot::new();
+        bot.insert_member("fran".to_string(), "Fran".to_string())
+            .await;
+        bot.insert_command("add".to_string(), Command::Add).await;
+        bot.insert_command("".to_string(), Command::Random).await;
+
+        let message = "!quotes".to_string();
+        if let Some(parsed_msg) = bot.parse_message(message).await {
+            assert_eq!(None, parsed_msg.author);
+            assert_eq!(Command::Random, parsed_msg.command);
+            assert_eq!(None, parsed_msg.args);
+        } else {
+            panic!();
+        }
+    }
+    #[tokio::test]
+    async fn parse_author_and_random_command_from_empty_tail() {
+        let mut bot = Bot::new();
+        bot.insert_member("fran".to_string(), "Fran".to_string())
+            .await;
+        bot.insert_command("add".to_string(), Command::Add).await;
+        bot.insert_command("".to_string(), Command::Random).await;
+
+        let message = "!quotes fran".to_string();
+        if let Some(parsed_msg) = bot.parse_message(message).await {
+            assert_eq!("Fran", parsed_msg.author.unwrap());
+            assert_eq!(Command::Random, parsed_msg.command);
+            assert_eq!(None, parsed_msg.args);
+        } else {
+            panic!();
+        }
+    }
 
     #[tokio::test]
     async fn parse_author_command_and_quote_from_message() {

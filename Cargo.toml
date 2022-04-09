@@ -27,9 +27,6 @@ features = [
 ]
 version = "0.10"
 
-[profile.dev]
-incremental = true
-
 [profile.dev.package.sqlx-macros]
 opt-level = 3
 
