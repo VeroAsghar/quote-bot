@@ -4,3 +4,5 @@
 *.sqlite-shm
 
 members.json
+build.sh
+deploy.sh
