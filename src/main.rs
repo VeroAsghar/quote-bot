@@ -16,13 +16,13 @@ impl EventHandler for Robot {
         let sender = msg.author;
         let guild_id = msg.guild_id.unwrap();
 
-        if let Some(parsed_msg) = self.bot.parse_message(msg.content.clone()).await {
+        if let Some(parsed_msg) = self.bot.parse_message(&msg.content).await {
             match parsed_msg.command {
                 Command::Add => {
                     if sender.has_role(&ctx, guild_id, STATIC_ID).await.unwrap() {
                         let response = Bot::add_quote(
                             parsed_msg.author.unwrap(),
-                            parsed_msg.args.unwrap(),
+                            &parsed_msg.args.unwrap(),
                             &self.database,
                         )
                         .await;
@@ -58,10 +58,10 @@ impl EventHandler for Robot {
     }
 }
 async fn setup_bot(bot: &mut Bot) {
-    bot.insert_command("add".to_string(), Command::Add).await;
-    bot.insert_command("length".to_string(), Command::Length)
+    bot.insert_command("add", Command::Add).await;
+    bot.insert_command("length", Command::Length)
         .await;
-    bot.insert_command("random".to_string(), Command::Random)
+    bot.insert_command("random", Command::Random)
         .await;
 }
 
@@ -86,7 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config: Config = serde_json::from_reader(reader)?;
     let mut bot = Bot::new();
     for quote_bot::config::Member { name, display_name } in config.members {
-        bot.insert_member(name, display_name).await;
+        bot.insert_member(&name, &display_name).await;
     }
     setup_bot(&mut bot).await;
     let robot = Robot { database, bot };
