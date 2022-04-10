@@ -14,9 +14,9 @@ pub enum Command {
     Random,
     IgnoreMsg,
 }
-pub struct ParsedMessage {
+pub struct ParsedMessage<'bot> {
     pub command: Command,
-    pub author: Option<String>,
+    pub author: Option<&'bot str>,
     pub args: Option<String>,
 }
 impl Bot {
@@ -26,13 +26,13 @@ impl Bot {
             commands: HashMap::new(),
         }
     }
-    pub async fn insert_member(&mut self, name: String, display_name: String) {
-        self.members.insert(name, display_name);
+    pub async fn insert_member(&mut self, name: &str, display_name: &str) {
+        self.members.insert(name.to_string(), display_name.to_string());
     }
-    pub async fn insert_command(&mut self, name: String, value: Command) {
-        self.commands.insert(name, value);
+    pub async fn insert_command(&mut self, name: &str, value: Command) {
+        self.commands.insert(name.to_string(), value);
     }
-    pub async fn parse_message(&self, message: String) -> Option<ParsedMessage> {
+        pub async fn parse_message<'bot>(&'bot self, message: &str) -> Option<ParsedMessage<'bot>> {
         let mut author = None;
         let mut args = None;
         let mut command = Command::IgnoreMsg;
@@ -40,13 +40,13 @@ impl Bot {
             let message = message.trim();
             let mut message: Vec<&str> = message.split(' ').collect();
             if let Some(value) = self.members.get(&message[0].to_ascii_lowercase()) {
-                author = Some(value.to_string());
+                author = Some(value.as_str());
                 message.remove(0);
             }
             if !message.is_empty() && message[0] != "" {
                 if let Some(value) = self.commands.get(&message[0].to_ascii_lowercase()) {
                     message.remove(0);
-                    args = Some(message.join(" ").to_string());
+                    args = Some(message.join(" "));
                     command = *value;
                 }
             } else {
@@ -63,7 +63,7 @@ impl Bot {
             })
         }
     }
-    pub async fn add_quote(author: String, quote: String, database: &sqlx::SqlitePool) -> String {
+    pub async fn add_quote(author: &str, quote: &str, database: &sqlx::SqlitePool) -> String {
         let quote = quote.trim();
         let date = Utc::now().date().to_string();
         let id = sqlx::query!(
@@ -78,7 +78,7 @@ impl Bot {
         .last_insert_rowid();
         format!("Added quote #{}.", id)
     }
-    pub async fn num_of_quotes(author: &Option<String>, database: &sqlx::SqlitePool) -> i32 {
+    pub async fn num_of_quotes(author: &Option<&str>, database: &sqlx::SqlitePool) -> i32 {
         if let Some(author) = author.as_deref() {
             let quotes = sqlx::query!(
                 r"SELECT COUNT(*) as count FROM quotes WHERE author = ?",
@@ -96,7 +96,7 @@ impl Bot {
             quotes.count
         }
     }
-    pub async fn length(author: Option<String>, database: &sqlx::SqlitePool) -> String {
+        pub async fn length(author: Option<&str>, database: &sqlx::SqlitePool) -> String {
         if author.is_some() {
             let quotes_count = Bot::num_of_quotes(&author, database).await;
             format!(r#"{} has {} quotes saved."#, author.unwrap(), quotes_count)
@@ -105,7 +105,7 @@ impl Bot {
             format!("Bot has {} quotes saved.", quotes_count)
         }
     }
-    pub async fn random(author: Option<String>, database: &sqlx::SqlitePool) -> String {
+    pub async fn random(author: Option<&str>, database: &sqlx::SqlitePool) -> String {
         let column_length = Bot::num_of_quotes(&author, database).await;
         let rand_rowid: i64 = (SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -158,12 +158,12 @@ mod tests {
     #[tokio::test]
     async fn parse_random_command_from_empty_tail() {
         let mut bot = Bot::new();
-        bot.insert_member("fran".to_string(), "Fran".to_string())
+        bot.insert_member("fran", "Fran")
             .await;
-        bot.insert_command("add".to_string(), Command::Add).await;
-        bot.insert_command("".to_string(), Command::Random).await;
+        bot.insert_command("add", Command::Add).await;
+        bot.insert_command("", Command::Random).await;
 
-        let message = "!quotes".to_string();
+        let message = "!quotes";
         if let Some(parsed_msg) = bot.parse_message(message).await {
             assert_eq!(None, parsed_msg.author);
             assert_eq!(Command::Random, parsed_msg.command);
@@ -175,12 +175,12 @@ mod tests {
     #[tokio::test]
     async fn parse_author_and_random_command_from_empty_tail() {
         let mut bot = Bot::new();
-        bot.insert_member("fran".to_string(), "Fran".to_string())
+        bot.insert_member("fran", "Fran")
             .await;
-        bot.insert_command("add".to_string(), Command::Add).await;
-        bot.insert_command("".to_string(), Command::Random).await;
+        bot.insert_command("add", Command::Add).await;
+        bot.insert_command("", Command::Random).await;
 
-        let message = "!quotes fran".to_string();
+        let message = "!quotes fran";
         if let Some(parsed_msg) = bot.parse_message(message).await {
             assert_eq!("Fran", parsed_msg.author.unwrap());
             assert_eq!(Command::Random, parsed_msg.command);
@@ -193,11 +193,11 @@ mod tests {
     #[tokio::test]
     async fn parse_author_command_and_quote_from_message() {
         let mut bot = Bot::new();
-        bot.insert_member("fran".to_string(), "Fran".to_string())
+        bot.insert_member("fran", "Fran")
             .await;
-        bot.insert_command("add".to_string(), Command::Add).await;
+        bot.insert_command("add", Command::Add).await;
 
-        let message = "!quotes fran add blah".to_string();
+        let message = "!quotes fran add blah";
         if let Some(parsed_msg) = bot.parse_message(message).await {
             assert_eq!("Fran", parsed_msg.author.unwrap());
             assert_eq!(Command::Add, parsed_msg.command);
@@ -210,11 +210,11 @@ mod tests {
     #[tokio::test]
     async fn ignore_message_without_parsable_command() {
         let mut bot = Bot::new();
-        bot.insert_member("fran".to_string(), "Fran".to_string())
+        bot.insert_member("fran", "Fran")
             .await;
-        bot.insert_command("add".to_string(), Command::Add).await;
+        bot.insert_command("add", Command::Add).await;
 
-        let message = "meow".to_string();
+        let message = "meow";
         if let Some(_parsed_msg) = bot.parse_message(message).await {
             panic!();
         }
