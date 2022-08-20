@@ -26,9 +26,9 @@ impl EventHandler for Handler {
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().expect("Failed to load .env file");
-    let token = std::env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
-    let database = std::env::var("DATABASE_FILE").expect("Expected a database file");
-    let members = std::env::var("MEMBERS_FILE").expect("Expected a members json file");
+    let token = std::env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN environment variable");
+    let database = std::env::var("DATABASE_FILE").expect("Expected DATABASE_FILE environment variable");
+    let members = std::env::var("MEMBERS_FILE").expect("Expected MEMBERS_FILE environment variable");
 
     let database = sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(5)
