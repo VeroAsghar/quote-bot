@@ -34,8 +34,7 @@ impl TypeMapKey for MemberContainer {
 }
 
 #[help]
-#[individual_command_tip = "Hiya!\n\n\
-If you want more information about a specific command, just pass the command as argument."]
+#[individual_command_tip = "If you want more information about a specific command, just pass the command as argument."]
 #[command_not_found_text = "Could not find: `{}`."]
 #[strikethrough_commands_tip_in_guild = ""]
 async fn help(
@@ -79,7 +78,7 @@ pub async fn add(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         let reply = format!("Added quote #{}.", id);
         msg.channel_id.say(&ctx.http, reply).await?;
     } else {
-        msg.channel_id.say(&ctx.http, "Member not found.").await?;
+        msg.channel_id.say(&ctx.http, "[Add] Member not found.").await?;
     }
     Ok(())
 }
@@ -129,7 +128,7 @@ pub async fn amount(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             let reply = format!("QuoteBot has {} quotes saved.", quotes_count);
             msg.channel_id.say(&ctx.http, reply).await?
         } else {
-            msg.channel_id.say(&ctx.http, "Member not found").await?
+            msg.channel_id.say(&ctx.http, "[Amount] Member not found").await?
         }
     };
     Ok(())
