@@ -6,3 +6,5 @@
 members.json
 build.sh
 deploy.sh
+
+.env
