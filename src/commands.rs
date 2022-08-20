@@ -1,55 +1,86 @@
-use std::{time::SystemTime, sync::Arc, collections::HashMap};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::SystemTime,
+};
 
 use chrono::{NaiveDate, Utc};
 use serenity::{
     client::Context,
-    framework::standard::{macros::{command, group}, Args, CommandResult},
-    model::channel::Message, prelude::{TypeMapKey, RwLock},
+    framework::standard::{
+        help_commands,
+        macros::{command, group, help},
+        Args, CommandGroup, CommandResult, HelpOptions,
+    },
+    model::{channel::Message, id::UserId},
+    prelude::{RwLock, TypeMapKey},
 };
-
 
 #[group]
 #[prefix = "quotes"]
 #[commands(random, add, amount)]
-#[default_command(random)]
 struct Quotes;
 
-struct DatabaseContainer;
+pub struct DatabaseContainer;
 
 impl TypeMapKey for DatabaseContainer {
     type Value = Arc<RwLock<sqlx::SqlitePool>>;
 }
 
-struct MemberContainer;
+pub struct MemberContainer;
 
 impl TypeMapKey for MemberContainer {
     type Value = Arc<RwLock<HashMap<String, String>>>;
 }
 
+#[help]
+#[individual_command_tip = "Hiya!\n\n\
+If you want more information about a specific command, just pass the command as argument."]
+#[command_not_found_text = "Could not find: `{}`."]
+#[strikethrough_commands_tip_in_guild = ""]
+async fn help(
+    context: &Context,
+    msg: &Message,
+    args: Args,
+    help_options: &'static HelpOptions,
+    groups: &[&'static CommandGroup],
+    owners: HashSet<UserId>,
+) -> CommandResult {
+    let _ = help_commands::with_embeds(context, msg, args, help_options, groups, owners).await;
+    Ok(())
+}
+
 #[command]
+#[description = "Adds a quote to QuoteBot, @Static only"]
 #[allowed_roles("Static")]
 pub async fn add(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let quote = args.message();
     let data = ctx.data.read().await;
     let database = data
         .get::<DatabaseContainer>()
         .expect("Expected DatabaseContainer in TypeMap")
         .clone();
-    let database = database.read()
-        .await;
-    let author = find_author(ctx, args.clone()).await;
-    let date = Utc::now().date().to_string();
-    let id = sqlx::query!(
-        r#"INSERT INTO quotes ( quote, author, date ) VALUES ( ?, ?, ? )"#,
-        quote,
-        author,
-        date
-    )
-    .execute(&*database)
-    .await?
-    .last_insert_rowid();
-    let reply = format!("Added quote #{}.", id);
-    msg.channel_id.say(&ctx.http, reply).await?;
+    let database = database.read().await;
+    let author_display_name = find_author(ctx, args.clone()).await;
+    if let Some(author) = author_display_name {
+        let (_, quote) = args
+            .message()
+            .split_once(' ')
+            .expect("Args length greater than 1");
+        let date = Utc::now().date().to_string();
+        let id = sqlx::query!(
+            r#"INSERT INTO quotes ( quote, author, date ) VALUES ( ?, ?, ? )"#,
+            quote,
+            author,
+            date
+        )
+        .execute(&*database)
+        .await?
+        .last_insert_rowid();
+        let reply = format!("Added quote #{}.", id);
+        msg.channel_id.say(&ctx.http, reply).await?;
+    } else {
+        msg.channel_id.say(&ctx.http, "Member not found.").await?;
+    }
     Ok(())
 }
 
@@ -73,33 +104,46 @@ async fn num_of_quotes(author: &Option<String>, database: &sqlx::SqlitePool) -> 
 }
 
 #[command]
+#[description = "Display amount of quotes for a given member or total amount if member is not given."]
 pub async fn amount(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    // Get database connection
     let data = ctx.data.read().await;
     let database = data
         .get::<DatabaseContainer>()
         .expect("Expected DatabaseContainer in TypeMap")
         .clone();
-    let database = database.read()
-        .await;
-    let author = find_author(ctx, args).await;
-    if let Some(author) = author {
+    let database = database.read().await;
+
+    let author_display_name = find_author(ctx, args.clone()).await;
+
+    if let Some(author) = author_display_name {
         let quotes_count = num_of_quotes(&Some(author.clone()), &*database).await;
         let reply = format!(r#"{} has {} quotes saved."#, author, quotes_count);
         msg.channel_id.say(&ctx.http, reply).await?
     } else {
-        let quotes_count = num_of_quotes(&None, &*database).await;
-        let reply = format!("Bot has {} quotes saved.", quotes_count);
-        msg.channel_id.say(&ctx.http, reply).await?
+        // Check to see if member is included in args, if empty display total
+        // number of quotes
+        let mut args = args;
+        if args.single::<String>()?.is_empty() {
+            let quotes_count = num_of_quotes(&None, &*database).await;
+            let reply = format!("QuoteBot has {} quotes saved.", quotes_count);
+            msg.channel_id.say(&ctx.http, reply).await?
+        } else {
+            msg.channel_id.say(&ctx.http, "Member not found").await?
+        }
     };
     Ok(())
 }
 
 async fn find_author(ctx: &Context, mut args: Args) -> Option<String> {
+    // Get member hash map
     let data = ctx.data.read().await;
     let members = data
         .get::<MemberContainer>()
         .expect("Expected MemberContainer in TypeMap")
         .clone();
+
+    // Pull out first word from args
     if let Ok(first_arg) = args.single::<String>() {
         Some(
             members
@@ -114,17 +158,18 @@ async fn find_author(ctx: &Context, mut args: Args) -> Option<String> {
 }
 
 #[command]
+#[description = "Display random quotes from QuoteBot."]
+#[aliases("")]
 pub async fn random(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let data = ctx.data.read().await;
     let database = data
         .get::<DatabaseContainer>()
         .expect("Expected DatabaseContainer in TypeMap")
         .clone();
-    let database = database.read()
-        .await;
-    let author = find_author(ctx, args).await;
+    let database = database.read().await;
+    let author_display_name = find_author(ctx, args).await;
 
-    let column_length = num_of_quotes(&author, &*database).await;
+    let column_length = num_of_quotes(&author_display_name, &*database).await;
     let rand_rowid: i64 = (SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap()
@@ -132,7 +177,7 @@ pub async fn random(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         % column_length as u64)
         .try_into()?;
 
-    if let Some(author) = author {
+    if let Some(author) = author_display_name {
         let quotes = sqlx::query!(r#"SELECT quote, date FROM quotes WHERE author = ?"#, author)
             .fetch_all(&*database)
             .await?;
@@ -164,4 +209,35 @@ pub async fn random(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         msg.channel_id.say(&ctx.http, reply).await?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use serenity::framework::standard::{Args, Delimiter};
+
+    #[test]
+    fn author_stripped_from_args() {
+        let args = Args::new("fran meow meow", &[Delimiter::Single(' ')]);
+        let (author, quote) = args
+            .message()
+            .split_once(' ')
+            .expect("Args length greater than 1");
+        assert_eq!(author, "fran");
+        assert_eq!(quote, "meow meow");
+    }
+
+    #[test]
+    fn author_can_be_found() {
+        let mut args = Args::new("fran meow", &[Delimiter::Single(' ')]);
+        let mut members = HashMap::new();
+        members.insert("fran".to_string(), "Fran".to_string());
+        if let Ok(first_arg) = args.single::<String>() {
+            let author_display_name = members.get(&first_arg.to_ascii_lowercase()).unwrap();
+            assert_eq!(author_display_name, "Fran");
+        } else {
+            panic!();
+        }
+    }
 }
