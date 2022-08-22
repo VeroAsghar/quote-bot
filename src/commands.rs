@@ -66,16 +66,16 @@ pub async fn add(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             .split_once(' ')
             .expect("Args length greater than 1");
         let date = Utc::now().date().to_string();
-        let id = sqlx::query!(
+        sqlx::query!(
             r#"INSERT INTO quotes ( quote, author, date ) VALUES ( ?, ?, ? )"#,
             quote,
             author,
             date
         )
         .execute(&*database)
-        .await?
-        .last_insert_rowid();
-        let reply = format!("Added quote #{}.", id);
+        .await?;
+        let count = num_of_quotes(&None, &database).await;
+        let reply = format!("Added quote #{}.", count);
         msg.channel_id.say(&ctx.http, reply).await?;
     } else {
         msg.channel_id.say(&ctx.http, "[Add] Member not found.").await?;
