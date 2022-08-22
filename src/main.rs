@@ -8,7 +8,7 @@ use std::sync::Arc;
 use quote_bot::commands::{DatabaseContainer, MemberContainer};
 use std::collections::HashMap;
 
-use quote_bot::commands::QUOTES_GROUP;
+use quote_bot::commands::{IMAGES_GROUP, QUOTES_GROUP};
 use quote_bot::commands::HELP;
 
 struct Handler;
@@ -57,7 +57,8 @@ async fn main() {
     let framework = StandardFramework::new()
         .configure(|c| c.prefix(">"))
         .help(&HELP)
-        .group(&QUOTES_GROUP);
+        .group(&QUOTES_GROUP)
+        .group(&IMAGES_GROUP);
 
     let mut client = Client::builder(&token)
         .framework(framework)
